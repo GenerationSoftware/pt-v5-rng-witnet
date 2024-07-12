@@ -106,16 +106,22 @@ contract RngWitnet is IRng {
     /// @param _requestId The ID of the request used to get the results of the RNG service
     /// @return isCompleted True if the request has completed and a random number is available, false otherwise
     function isRequestComplete(uint32 _requestId) onlyValidRequest(_requestId) external view returns (bool) {
-        (uint256 witnetQueryId,,) = witnetRandomness.getRandomizeData(requests[_requestId]);
-        return witnetRandomness.witnet().getQueryResponseStatus(witnetQueryId) == WitnetV2.ResponseStatus.Ready;
+        return witnetRandomness.isRandomized(requests[_requestId]);
     }
 
-    /// @notice Checks if a given request has failed. If it has, `requestRandomNumber` can be triggered again.
+    /// @notice Checks if a given request has completed with errors and does not currently have a backfilled RNG result.
+    /// @dev Witnet can backfill failed RNG requests with the results of a successful request posted after. Due
+    /// to this behavior, it is possible for a request to be considered failed for some time and then be completed
+    /// later and no longer be failed. Once completed, the request can no longer switch back to a failed state.
     /// @param _requestId The ID of the request to check
-    /// @return True if the Witnet request failed, false otherwise
+    /// @return True if the Witnet request failed and does not have backfilled RNG, false otherwise
     function isRequestFailed(uint32 _requestId) onlyValidRequest(_requestId) public view returns (bool) {
-        (uint256 witnetQueryId,,) = witnetRandomness.getRandomizeData(requests[_requestId]);
-        return witnetRandomness.witnet().getQueryResponseStatus(witnetQueryId) == WitnetV2.ResponseStatus.Error;
+        if (witnetRandomness.isRandomized(requests[_requestId])) {
+            return false;
+        } else {
+            (uint256 witnetQueryId,,) = witnetRandomness.getRandomizeData(requests[_requestId]);
+            return witnetRandomness.witnet().getQueryResponseStatus(witnetQueryId) == WitnetV2.ResponseStatus.Error;
+        }
     }
 
     /// @notice Gets the random number produced by the 3rd-party service

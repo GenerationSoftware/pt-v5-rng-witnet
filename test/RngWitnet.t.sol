@@ -58,18 +58,13 @@ contract RngWitnetTest is Test {
     function test_isRequestComplete() public {
         (uint32 requestId,,) = requestRandomNumber();
         uint256 witnetQueryId = 12345;
-        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.getRandomizeData.selector, rngWitnet.requests(requestId)), abi.encode(witnetQueryId,0,0));
 
         // not completed
-        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Void));
-        assertEq(rngWitnet.isRequestComplete(requestId), false);
-        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Awaiting));
-        assertEq(rngWitnet.isRequestComplete(requestId), false);
-        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Error));
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(false));
         assertEq(rngWitnet.isRequestComplete(requestId), false);
 
         // completed
-        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Ready));
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(true));
         assertEq(rngWitnet.isRequestComplete(requestId), true);
     }
 
@@ -79,15 +74,42 @@ contract RngWitnetTest is Test {
     }
 
     function test_isRequestFailed() public {
-        (,uint256 lockBlock,) = requestRandomNumber();
+        (uint32 requestId,,) = requestRandomNumber();
+        uint256 witnetQueryId = 12345;
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.getRandomizeData.selector, rngWitnet.requests(requestId)), abi.encode(witnetQueryId,0,0));
 
-        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.getRandomizeData.selector, lockBlock), abi.encode(999, 0, 0));
+        // not randomized
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(false));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Ready));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(false));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Void));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(false));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Awaiting));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
+        
 
-        vm.mockCall(address(witnet), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, 999), abi.encode(WitnetV2.ResponseStatus.Ready));
-        assertEq(rngWitnet.isRequestFailed(1), false);
+        // not randomized and errored
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(false));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Error));
+        assertEq(rngWitnet.isRequestFailed(requestId), true);
 
-        vm.mockCall(address(witnet), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, 999), abi.encode(WitnetV2.ResponseStatus.Error));
-        assertEq(rngWitnet.isRequestFailed(1), true);
+        // randomized, but errored
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(true));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Error));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
+
+        // randomized
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(true));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Ready));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(true));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Void));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
+        vm.mockCall(address(witnetRandomness), abi.encodeWithSelector(witnetRandomness.isRandomized.selector, rngWitnet.requests(requestId)), abi.encode(true));
+        vm.mockCall(address(witnetRandomness.witnet()), abi.encodeWithSelector(witnet.getQueryResponseStatus.selector, witnetQueryId), abi.encode(WitnetV2.ResponseStatus.Awaiting));
+        assertEq(rngWitnet.isRequestFailed(requestId), false);
     }
 
     function test_isRequestFailed_UnknownRequest() public {
